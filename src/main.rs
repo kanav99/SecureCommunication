@@ -17,13 +17,14 @@ fn main() {
 }
 
 fn real_main() -> Result<()> {
-    let mut alice = User::new("Alice", Variant::OrionReversed);
-    let mut bob = User::new("Bob", Variant::Orion);
+    let mut alice = User::new("Alice", Variant::OrionReversed)?;
+    let mut bob = User::new("Bob", Variant::Orion)?;
 
     // Bob wants to send a message to Alice
     bob.set_up_session(&mut alice)?;
 
     bob.send_message(&alice, "Hello Alice!")?;
+    alice.send_message(&bob, "Great, how about you?")?;
 
     Ok(())
 }

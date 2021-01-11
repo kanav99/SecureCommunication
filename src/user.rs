@@ -1,7 +1,10 @@
 use crate::helpers::errors::*;
 use crate::message::*;
 use orion;
-use ring::{agreement, rand};
+use ring::{
+    agreement, rand,
+    signature::{self, KeyPair},
+};
 
 #[derive(Debug)]
 pub struct User {
@@ -9,21 +12,33 @@ pub struct User {
     variant: Variant,
     last_session_key: [u8; 32],
     rng: rand::SystemRandom,
+    signing_key_pair: signature::Ed25519KeyPair,
 }
 
 impl User {
-    pub fn new(name: &str, variant: Variant) -> User {
+    pub fn new(name: &str, variant: Variant) -> Result<User> {
         let rng = rand::SystemRandom::new();
-        return User {
+        let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
+        let key_pair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
+        Ok(User {
             name: String::from(name),
             variant: variant,
             last_session_key: [0; 32],
             rng: rng,
-        };
+            signing_key_pair: key_pair,
+        })
     }
 
     pub fn get_variant(&self) -> &Variant {
         return &self.variant;
+    }
+
+    pub fn get_public_key(&self) -> &[u8] {
+        self.signing_key_pair.public_key().as_ref()
+    }
+
+    pub fn sign_message(&self, msg: &str) -> signature::Signature {
+        self.signing_key_pair.sign(msg.as_bytes())
     }
 
     // JUST FOR DEBUG!!!
@@ -81,48 +96,55 @@ impl User {
     pub fn send_message(&self, peer: &User, msg: &str) -> Result<()> {
         let peer_variant = peer.get_variant();
         println!("Leak from {:?}: {:?}", self.name, peer_variant);
+
+        let sign = self.sign_message(msg);
+
         match peer_variant {
             Variant::Orion => {
                 let sk = orion::aead::SecretKey::from_slice(&self.last_session_key)?;
                 let ciphertext = orion::aead::seal(&sk, msg.as_bytes())?;
                 println!("Leak from {:?}: {:?}", self.name, ciphertext);
-                peer.recv_message(self, ciphertext)?;
+                peer.recv_message(self, ciphertext, sign)?;
             }
             Variant::OrionReversed => {
                 let sk = orion::aead::SecretKey::from_slice(&self.last_session_key)?;
                 let ciphertext_r = orion::aead::seal(&sk, msg.as_bytes())?;
                 let ciphertext = ciphertext_r.into_iter().rev().collect();
                 println!("Leak from {:?}: {:?}", self.name, ciphertext);
-                peer.recv_message(self, ciphertext)?;
+                peer.recv_message(self, ciphertext, sign)?;
             }
         }
         Ok(())
     }
 
-    pub fn recv_message(&self, peer: &User, ciphertext: Vec<u8>) -> Result<()> {
-        match self.get_variant() {
+    pub fn recv_message(
+        &self,
+        peer: &User,
+        ciphertext: Vec<u8>,
+        sign: signature::Signature,
+    ) -> Result<()> {
+        let msg = match self.get_variant() {
             Variant::Orion => {
                 let sk = orion::aead::SecretKey::from_slice(&self.last_session_key)?;
-                let msg = orion::aead::open(&sk, &ciphertext)?;
-                println!(
-                    "Recieve {:?}: {:?} from {:?}",
-                    self.name,
-                    String::from_utf8(msg)?,
-                    peer.name
-                );
+                orion::aead::open(&sk, &ciphertext)?
             }
             Variant::OrionReversed => {
                 let sk = orion::aead::SecretKey::from_slice(&self.last_session_key)?;
                 let ciphertext_r: Vec<_> = ciphertext.into_iter().rev().collect();
-                let msg = orion::aead::open(&sk, &ciphertext_r)?;
-                println!(
-                    "Recieve {:?}: {:?} from {:?}",
-                    self.name,
-                    String::from_utf8(msg)?,
-                    peer.name
-                );
+                orion::aead::open(&sk, &ciphertext_r)?
             }
-        }
+        };
+
+        let peer_public_key =
+            signature::UnparsedPublicKey::new(&signature::ED25519, peer.get_public_key());
+
+        peer_public_key.verify(&msg, sign.as_ref())?;
+        println!(
+            "Recieve {:?}: {:?} from {:?}",
+            self.name,
+            String::from_utf8(msg)?,
+            peer.name
+        );
         Ok(())
     }
 }

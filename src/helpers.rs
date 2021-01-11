@@ -21,4 +21,10 @@ pub mod errors {
             Error::from("Unspecified Crypto Error")
         }
     }
+
+    impl From<ring::error::KeyRejected> for Error {
+        fn from(_: ring::error::KeyRejected) -> Self {
+            Error::from("KeyRejected Crypto Error")
+        }
+    }
 }

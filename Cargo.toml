@@ -1,0 +1,12 @@
+[package]
+name = "seccom"
+version = "0.1.0"
+authors = ["Kanav Gupta <kanav0610@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+orion = "0.15.5"
+error-chain = "0.12.1"
+ring = "0.16.19"

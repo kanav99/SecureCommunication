@@ -1,10 +1,8 @@
-use orion;
-use ring;
-
 pub mod errors {
     error_chain! {
         foreign_links {
             Crypto(::orion::errors::UnknownCryptoError);
+            UTF8Error(::std::string::FromUtf8Error);
         }
     }
 
@@ -15,6 +13,12 @@ pub mod errors {
         for e in e.iter().skip(1) {
             println!("[{}]: {}", i, e);
             i += 1;
+        }
+    }
+
+    impl From<ring::error::Unspecified> for Error {
+        fn from(_: ring::error::Unspecified) -> Self {
+            Error::from("Unspecified Crypto Error")
         }
     }
 }

@@ -1,7 +1,8 @@
 #[derive(Debug)]
 pub enum Variant {
     Orion,
-    Ring,
+    OrionReversed,
+    // Ring, // I don't understand how to use Ring to perform AEAD
 }
 
 #[derive(Debug)]

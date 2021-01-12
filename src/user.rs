@@ -10,7 +10,7 @@ use ring::{
 pub struct User {
     name: String,
     variant: Variant,
-    last_session_key: [u8; 32],
+    session_key: [u8; 32],
     rng: rand::SystemRandom,
     signing_key_pair: signature::Ed25519KeyPair,
     last_message: String,
@@ -24,7 +24,7 @@ impl User {
         Ok(User {
             name: String::from(name),
             variant: variant,
-            last_session_key: [0; 32],
+            session_key: [0; 32],
             rng: rng,
             signing_key_pair: key_pair,
             last_message: String::new(),
@@ -48,6 +48,10 @@ impl User {
         &self.last_message
     }
 
+    pub fn get_session_key(&self) -> [u8; 32] {
+        self.session_key
+    }
+
     // Session formation methods
     pub fn accept_session<F>(&mut self, peer_public_key: agreement::PublicKey, cb: F) -> Result<()>
     where
@@ -66,7 +70,7 @@ impl User {
             ring::error::Unspecified,
             |_key_material| {
                 // Skipped KDF due to time limitations..
-                self.last_session_key.copy_from_slice(_key_material);
+                self.session_key.copy_from_slice(_key_material);
                 Ok(())
             },
         )?;
@@ -86,7 +90,7 @@ impl User {
                 ring::error::Unspecified,
                 |_key_material| {
                     // Skipped KDF due to time limitations..
-                    self.last_session_key.copy_from_slice(_key_material);
+                    self.session_key.copy_from_slice(_key_material);
                     Ok(())
                 },
             )?;
@@ -100,11 +104,11 @@ impl User {
     pub fn encrypt_message(&self, variant: &Variant, msg: &str) -> Result<Vec<u8>> {
         let ct = match variant {
             Variant::Orion => {
-                let sk = orion::aead::SecretKey::from_slice(&self.last_session_key)?;
+                let sk = orion::aead::SecretKey::from_slice(&self.session_key)?;
                 orion::aead::seal(&sk, msg.as_bytes())?
             }
             Variant::OrionReversed => {
-                let sk = orion::aead::SecretKey::from_slice(&self.last_session_key)?;
+                let sk = orion::aead::SecretKey::from_slice(&self.session_key)?;
                 let ciphertext_r = orion::aead::seal(&sk, msg.as_bytes())?;
                 ciphertext_r.into_iter().rev().collect()
             }
@@ -115,11 +119,11 @@ impl User {
     pub fn decrypt_message(&self, variant: &Variant, ciphertext: &Vec<u8>) -> Result<Vec<u8>> {
         let msg = match variant {
             Variant::Orion => {
-                let sk = orion::aead::SecretKey::from_slice(&self.last_session_key)?;
+                let sk = orion::aead::SecretKey::from_slice(&self.session_key)?;
                 orion::aead::open(&sk, &ciphertext)?
             }
             Variant::OrionReversed => {
-                let sk = orion::aead::SecretKey::from_slice(&self.last_session_key)?;
+                let sk = orion::aead::SecretKey::from_slice(&self.session_key)?;
                 let mut ciphertext_r: Vec<u8> = Vec::new();
                 for i in ciphertext.iter().rev() {
                     ciphertext_r.push(*i);
@@ -141,6 +145,7 @@ impl User {
         Ok(Message::new(ciphertext, sign))
     }
 
+    // Communication methods
     pub fn send_message(&self, peer: &mut User, msg: &str) -> Result<()> {
         let message = self.form_message(msg)?;
         // Send message

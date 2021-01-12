@@ -36,6 +36,8 @@ fn consistency() -> Result<()> {
     let mut bob = User::new("Bob", Variant::Orion)?;
 
     bob.set_up_session(&mut alice)?;
+    assert_eq!(bob.get_session_key(), alice.get_session_key());
+
     bob.send_message(&mut alice, "Hello Alice!")?;
     assert_eq!(alice.get_last_message(), "Hello Alice!");
 
@@ -84,5 +86,28 @@ fn identity() -> Result<()> {
     if let Ok(()) = bob.recv_message(&alice, message) {
         panic!("Bob recieved the message with wrong identity");
     }
+    Ok(())
+}
+
+#[test]
+fn mitm() -> Result<()> {
+    let mut oscar_1 = User::new("oscar1", Variant::Orion)?;
+    let mut oscar_2 = User::new("oscar2", Variant::Orion)?;
+    let mut alice = User::new("alice", Variant::Orion)?;
+    let mut bob = User::new("bob", Variant::Orion)?;
+
+    // Oscar sets up session with bob and alice
+    oscar_1.set_up_session(&mut bob)?;
+    oscar_2.set_up_session(&mut alice)?;
+
+    // Couldn't implement  MITM immunity due to time constraints
+    // It is not possible because we assume there must be some pre-shared identity b/w
+    // alice and bob. In this case, alice and bob know each other's public key.
+    // When alice/bob recieves a session request from oscar, they send they should also
+    // request the signature of the ephermal public key with the signing key.
+    // As oscar doesn't have the private signing key of bob, he can't send the signature
+    // and alice/bob reject the connection.
+    // Hence, alice/bob always know with whom they are talking.
+
     Ok(())
 }

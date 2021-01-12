@@ -2,11 +2,11 @@
 extern crate error_chain;
 
 // use orion::aead;
-mod helpers;
+mod errors;
 mod message;
 mod user;
 
-use helpers::errors::*;
+use errors::*;
 use message::*;
 use user::User;
 
